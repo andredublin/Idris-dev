@@ -16,7 +16,7 @@ data Doc : Type where
 
   Cat     : (x : Doc) -> (y : Doc) -> Doc
   Nest    : (lvl : Int) -> (x : Doc) -> Doc
-  Union   : (x : Doc) -> (y : Doc) -> Doc
+  Union   : (x : Doc) -> (y : Lazy Doc) -> Doc
 
   Column  : (f : Int -> Doc) -> Doc
   Nesting : (f : Int -> Doc) -> Doc
@@ -145,9 +145,9 @@ fits w (Line _ _)          = if w < 0 then False else True
 
 ||| Use the Wadler-Leijen algorithm to pretty print the `doc`.
 ||| The algorithm uses a page width of `width` and a ribbon
-||| width of `(ribbonfrac * width)` characters. The ribbon width is
+||| width of `(rfrac * width)` characters. The ribbon width is
 ||| the maximal amount of non-indentation characters on a line. The
-||| parameter `ribbonfrac` should be between `0.0` and `1.0`. If it is
+||| parameter `rfrac` should be between `0.0` and `1.0`. If it is
 ||| lower or higher, the ribbon width will be 0 or `width`
 ||| respectively.
 render : (rfrac : Double)
@@ -162,11 +162,12 @@ render rfrac w doc = best w 0 0 doc (const Empty)
     nicest : (lvl : Int)
           -> (col : Int)
           -> (x : PrettyDoc)
-          -> (y : PrettyDoc)
+          -> (y : Lazy PrettyDoc)
           -> PrettyDoc
     nicest n k x y =
-      let width = min (w - k) (rwidth - k + n)
-       in if fits width x then x else y
+      if fits (min (w - k) (rwidth - k + n)) x
+      then x
+      else y
 
     best : (lvl : Int)
         -> (col : Int)

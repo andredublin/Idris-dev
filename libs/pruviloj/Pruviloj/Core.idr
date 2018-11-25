@@ -7,10 +7,6 @@ import Language.Reflection.Utils
 
 %access public export
 
-||| Run something for effects, throwing away the return value
-ignore : Functor f => f a -> f ()
-ignore x = map (const ()) x
-
 ||| Do nothing
 skip : Applicative f => f ()
 skip = pure ()
@@ -234,12 +230,12 @@ getTTType r = snd <$> check !getEnv r
 both : Raw -> TTName -> TTName -> Elab ()
 both tm n1 n2 =
     do -- We don't know that the term is canonical, so let-bind projections applied to it
-       (A, B) <- isPairTy !(getTTType tm)
-       remember n1 A; apply `(fst {a=~A} {b=~B} ~tm) []; solve
-       remember n2 B; apply `(snd {a=~A} {b=~B} ~tm) []; solve
+       (a, b) <- isPairTy !(getTTType tm)
+       remember n1 a; apply `(fst {a=~a} {b=~b} ~tm) []; solve
+       remember n2 b; apply `(snd {a=~a} {b=~b} ~tm) []; solve
   where
     isPairTy : TT -> Elab (Raw, Raw)
-    isPairTy `((~A, ~B) : Type) = [| MkPair (forget A) (forget B) |]
+    isPairTy `((~a, ~b) : Type) = [| MkPair (forget a) (forget b) |]
     isPairTy tm = fail [TermPart tm, TextPart "is not a pair"]
 
 ||| Let-bind all results of completely destructuring nested tuples.
@@ -256,6 +252,25 @@ unproduct tm =
        try (unproduct (Var n1))
        try (unproduct (Var n2))
 
+||| Try to apply the constructors of the goal data type one by one,
+||| and apply the first one that works. If one of the constructors work,
+||| the explicit arguments to the constructor are created as new holes and
+||| the hole names are returned in a list. The parameters of the type and
+||| the implicit arguments of the constructor will be solved by unification.
+||| Similar to `constructor` in Coq.
+construct : Elab (List TTName)
+construct = case headName !goalType of
+    Nothing =>
+      fail [TextPart "Goal is not of a type declared with the data keyword"]
+    Just h =>
+      choiceMap (\(n, xs, _) => apply (Var n) (map shouldUnify xs) <* solve)
+                !(constructors <$> lookupDatatypeExact h)
+      <|> fail [TextPart "No constructors apply"]
+  where
+    shouldUnify : CtorArg -> Bool
+    shouldUnify (CtorField (MkFunArg _ _ Explicit _)) = False
+    shouldUnify _ = True
+
 ||| A special-purpose tactic that attempts to solve a goal using
 ||| `Refl`. This is useful for ensuring that goals in fact are trivial
 ||| when developing or testing other tactics; otherwise, consider
@@ -263,8 +278,8 @@ unproduct tm =
 reflexivity : Elab ()
 reflexivity =
     case !goalType of
-      `((=) {A=~A} {B=~_} ~x ~_) =>
-        do fill `(Refl {A=~A} {x=~x})
+      `((=) {A=~a} {B=~_} ~x ~_) =>
+        do fill `(Refl {A=~a} {x=~x})
            solve
       _ => fail [ TextPart "The goal is not an equality, so"
                 , NamePart `{reflexivity}
@@ -288,9 +303,9 @@ symmetry =
 symmetryAs : (t : Raw) -> (hint : String) -> Elab TTName
 symmetryAs t hint =
     case !(getTTType t) of
-      `((=) {A=~A} {B=~B} ~l ~r) =>
-        do af <- forget A
-           bf <- forget B
+      `((=) {A=~a} {B=~b} ~l ~r) =>
+        do af <- forget a
+           bf <- forget b
            lf <- forget l
            rf <- forget r
            let ts = the Raw $ `(sym {a=~af} {b=~bf} {left=~lf} {right=~rf} ~t)

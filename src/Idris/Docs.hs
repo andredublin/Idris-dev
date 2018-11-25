@@ -1,12 +1,12 @@
 {-|
 Module      : Idris.Docs
 Description : Data structures and utilities to work with Idris Documentation.
-Copyright   :
+
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
 
-{-# LANGUAGE DeriveFunctor, MultiWayIf, PatternGuards #-}
+{-# LANGUAGE CPP, DeriveFunctor, MultiWayIf, PatternGuards #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 module Idris.Docs (
@@ -30,7 +30,11 @@ import Idris.Options (HowMuchDocs(..))
 
 import Util.Pretty
 
+#if (MIN_VERSION_base(4,11,0))
+import Prelude hiding ((<$>), (<>))
+#else
 import Prelude hiding ((<$>))
+#endif
 
 import Data.List
 import Data.Maybe
@@ -239,10 +243,6 @@ pprintDocs ist (InterfaceDoc n doc meths params constraints implementations sub_
 
     updateRef nm (PRef fc _ _) = PRef fc [] nm
     updateRef _  pt          = pt
-
-    isSubInterface (PPi (Constraint _ _ _) _ _ (PApp _ _ args) (PApp _ (PRef _ _ nm) args')) = nm == n && map getTm args == map getTm args'
-    isSubInterface (PPi _   _            _ _ pt)                                           = isSubInterface pt
-    isSubInterface _                                                                       = False
 
     prettyConstraints =
       cat (punctuate (comma <> space) (map (pprintPTerm ppo params' [] infixes) constraints))

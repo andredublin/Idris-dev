@@ -11,8 +11,8 @@ data types. For example, we would like arithmetic operators to work on
 to display different types in a uniform way.
 
 To achieve this, we use *interfaces*, which are similar to type classes in
-Haskell or traits in Rust.  To define an interface, we provide a collection of
-overloadable functions.  A simple example is the ``Show``
+Haskell or traits in Rust. To define an interface, we provide a collection of
+overloadable functions. A simple example is the ``Show``
 interface, which is defined in the prelude and provides an interface for
 converting values to ``String``:
 
@@ -31,8 +31,7 @@ This generates a function of the following type (which we call a
 We can read this as: “under the constraint that ``a`` has an implementation
 of ``Show``, take an input ``a`` and return a ``String``.” An implementation
 of an interface is defined by giving definitions of the methods of the interface.
-For example, the
-``Show`` implementation for ``Nat`` could be defined as:
+For example, the ``Show`` implementation for ``Nat`` could be defined as:
 
 .. code-block:: idris
 
@@ -48,8 +47,8 @@ For example, the
 Only one implementation of an interface can be given for a type — implementations may
 not overlap. Implementation declarations can themselves have constraints.
 To help with resolution, the arguments of an implementation must be
-constructors (either data or type constructors) or variables 
-(i.e. you cannot give an implementation for a function).  For
+constructors (either data or type constructors) or variables
+(i.e. you cannot give an implementation for a function). For
 example, to define a ``Show`` implementation for vectors, we need to know
 that there is a ``Show`` implementation for the element type, because we are
 going to use it to convert each element to a ``String``:
@@ -157,7 +156,7 @@ Note: Interfaces and ``mutual`` blocks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Idris is strictly "define before use", except in ``mutual`` blocks.
-In a ``mutual`` block, Idris elaborates in two passes: types on the first 
+In a ``mutual`` block, Idris elaborates in two passes: types on the first
 pass and definitions on the second. When the mutual block contains an
 interface declaration, it elaborates the interface header but none of the
 method types on the first pass, and elaborates the method types and any
@@ -259,7 +258,7 @@ are both available, or return ``Nothing`` if one or both are not ("fail fast"). 
     Nothing : Maybe Int
 
 Pattern Matching Bind
----------------------
+~~~~~~~~~~~~~~~~~~~~~
 
 Sometimes we want to pattern match immediately on the result of a function
 in ``do`` notation. For example, let's say we have a function ``readNumber``
@@ -323,7 +322,7 @@ of the ``do`` block. The second part gives the alternative bindings, of which
 there may be more than one.
 
 ``!``-notation
---------------
+~~~~~~~~~~~~~~
 
 In many cases, using ``do``-notation can make programs unnecessarily
 verbose, particularly in cases such as ``m_add`` above where the value
@@ -367,7 +366,7 @@ is lifted to:
                      f g'
 
 Monad comprehensions
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 The list comprehension notation we saw in Section
 :ref:`sect-more-expr` is more general, and applies to anything which
@@ -461,7 +460,7 @@ application ``[| f a1 …an |]`` is translated into ``pure f <*> a1 <*>
     m_add' x y = [| x + y |]
 
 An error-handling interpreter
------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Idiom notation is commonly useful when defining evaluators. McBride
 and Paterson describe such an evaluator [1]_, for a language similar
@@ -534,7 +533,7 @@ Named Implementations
 
 It can be desirable to have multiple implementations of an interface for the
 same type, for example to provide alternative methods for sorting or printing
-values.  To achieve this, implementations can be *named* as follows:
+values. To achieve this, implementations can be *named* as follows:
 
 .. code-block:: idris
 
@@ -574,7 +573,7 @@ the prelude defines the following ``Semigroup`` interface:
     interface Semigroup ty where
       (<+>) : ty -> ty -> ty
 
-Then it defines ``Monoid``, which extends ``Semigroup`` with a "neutral"
+Then it defines ``Monoid``, which extends ``Semigroup`` with a “neutral”
 value:
 
 .. code-block:: idris

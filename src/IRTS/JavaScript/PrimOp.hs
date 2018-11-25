@@ -1,7 +1,7 @@
 {-|
 Module      : IRTS.JavaScript.PrimOp
 Description : The JavaScript primitive operations.
-Copyright   :
+
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
@@ -16,11 +16,7 @@ module IRTS.JavaScript.PrimOp
   , jsPrimCoerce
   ) where
 
-import Data.Char
-import Data.List
 import qualified Data.Map.Strict as Map
-import Data.Text (Text)
-import qualified Data.Text as T
 import Idris.Core.TT
 import IRTS.JavaScript.AST
 import IRTS.Lang
@@ -29,8 +25,6 @@ data JsPrimTy = PTBool | PTAny deriving (Eq, Ord)
 
 type PrimF = [JsExpr] -> JsExpr
 type PrimDec = (Bool, JsPrimTy, PrimF) -- the bool indicates if bigint library is used or not
-
-deriving instance Ord PrimFn
 
 primDB :: Map.Map PrimFn PrimDec
 primDB =
@@ -109,10 +103,10 @@ primDB =
   , item (LSHL (ITFixed IT64)) True PTAny $
     \[l, r] -> JsForeign "%0.shiftLeft(%1).and(new $JSRTS.jsbn.BigInteger(%2))" [l,r, JsStr $ show 0xFFFFFFFFFFFFFFFF]
   , item (LSHL ITBig) True PTAny $ method "shiftLeft"
-  , item (LLSHR ITNative) False PTAny $ JsForeign "%0 >> %1 |0"
-  , item (LLSHR (ITFixed IT8)) False PTAny $ JsForeign "%0 >> %1"
-  , item (LLSHR (ITFixed IT16)) False PTAny $ JsForeign "%0 >> %1"
-  , item (LLSHR (ITFixed IT32)) False PTAny $ JsForeign "%0 >> %1|0"
+  , item (LLSHR ITNative) False PTAny $ JsForeign "%0 >>> %1 |0"
+  , item (LLSHR (ITFixed IT8)) False PTAny $ JsForeign "%0 >>> %1"
+  , item (LLSHR (ITFixed IT16)) False PTAny $ JsForeign "%0 >>> %1"
+  , item (LLSHR (ITFixed IT32)) False PTAny $ JsForeign "%0 >>> %1|0"
   , item (LLSHR (ITFixed IT64)) True PTAny $ JsForeign "%0.shiftRight(%1)"
   , item (LASHR ITNative) False PTAny $ JsForeign "%0 >> %1 |0"
   , item (LASHR (ITFixed IT8)) False PTAny $ JsForeign "%0 >> %1"
@@ -221,6 +215,7 @@ primDB =
   , item LFASin False PTAny $ jsAppN "Math.asin"
   , item LFACos False PTAny $ jsAppN "Math.acos"
   , item LFATan False PTAny $ jsAppN "Math.atan"
+  , item LFATan2 False PTAny $ jsAppN "Math.atan2"
   , item LFSqrt False PTAny $ jsAppN "Math.sqrt"
   , item LFFloor False PTAny $ jsAppN "Math.floor"
   , item LFCeil False PTAny $ jsAppN "Math.ceil"

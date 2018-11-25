@@ -1,7 +1,7 @@
 {-|
 Module      : Util.System
 Description : Utilities for interacting with the system.
-Copyright   :
+
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
@@ -10,6 +10,7 @@ module Util.System( tempfile
                   , withTempdir
                   , rmFile
                   , catchIO
+                  , isDarwin
                   , isWindows
                   , writeSource
                   , writeSourceText
@@ -49,6 +50,9 @@ catchIO = CE.catch
 
 isWindows :: Bool
 isWindows = os `elem` ["win32", "mingw32", "cygwin32"]
+
+isDarwin :: Bool
+isDarwin = os == "darwin"
 
 -- | Create a temp file with the extensiom ext (in the format ".xxx")
 tempfile :: String -> IO (FilePath, Handle)

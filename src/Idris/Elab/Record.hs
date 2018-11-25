@@ -1,7 +1,7 @@
 {-|
 Module      : Idris.Elab.Record
 Description : Code to elaborate records.
-Copyright   :
+
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
@@ -11,29 +11,16 @@ module Idris.Elab.Record(elabRecord) where
 import Idris.AbsSyntax
 import Idris.Core.Evaluate
 import Idris.Core.TT
-import Idris.Coverage
-import Idris.DataOpts
-import Idris.DeepSeq
 import Idris.Delaborate
 import Idris.Docstrings
 import Idris.Elab.Data
-import Idris.Elab.Data
-import Idris.Elab.Term
-import Idris.Elab.Type
-import Idris.Elab.Utils
 import Idris.Error
-import Idris.Imports
-import Idris.Inliner
-import Idris.Output (iWarn, iputStrLn, pshow, sendHighlighting)
-import Idris.Parser.Expr (tryFullExpr)
-import Idris.PartialEval
-import Idris.Primitives
-import Idris.Providers
-import IRTS.Lang
+import Idris.Output (sendHighlighting)
 
 import Control.Monad
 import Data.List
 import Data.Maybe
+import qualified Data.Set as S
 
 -- | Elaborate a record declaration
 elabRecord :: ElabInfo
@@ -80,10 +67,10 @@ elabRecord info what doc rsyn fc opts tyn nfc params paramDocs fields cname cdoc
            logElab 1 $ "fieldsWIthNameAndDoc " ++ show fieldsWithNameAndDoc
            elabRecordFunctions info rsyn fc tyn paramsAndDoc fieldsWithNameAndDoc dconName target
 
-           sendHighlighting $
-             [(nfc, AnnName tyn Nothing Nothing Nothing)] ++
-             maybe [] (\(_, cnfc) -> [(cnfc, AnnName dconName Nothing Nothing Nothing)]) cname ++
-             [(ffc, AnnBoundName fn False) | (fn, ffc, _, _, _) <- fieldsWithName]
+           sendHighlighting $ S.fromList $
+             [(FC' nfc, AnnName tyn Nothing Nothing Nothing)] ++
+             maybe [] (\(_, cnfc) -> [(FC' cnfc, AnnName dconName Nothing Nothing Nothing)]) cname ++
+             [(FC' ffc, AnnBoundName fn False) | (fn, ffc, _, _, _) <- fieldsWithName]
 
   where
     -- | Generates a type constructor.
@@ -225,15 +212,6 @@ elabRecordFunctions info rsyn fc tyn params fields dconName target
     isFieldOrParam' :: (Name, a) -> Bool
     isFieldOrParam' = isFieldOrParam . fst
 
-    isField :: Name -> Bool
-    isField = flip elem fieldNames
-
-    isField' :: (Name, a, b, c, d, f) -> Bool
-    isField' (n, _, _, _, _, _) = isField n
-
-    fieldTerms :: [PTerm]
-    fieldTerms = [t | (_, _, _, t, _) <- fields]
-
     -- Delabs the TT to PTerm
     -- This is not good.
     -- However, for machine generated implicits, there seems to be no PTerm available.
@@ -251,13 +229,6 @@ elabRecordFunctions info rsyn fc tyn params fields dconName target
     freeName (MN i n) = sMN i ("free_" ++ str n)
     freeName (NS n s) = NS (freeName n) s
     freeName n = n
-
-    -- | Zips together parameters with their documentation. If no documentation for a given field exists, an empty docstring is used.
-    zipParams :: IState -> [(Name, Plicity, PTerm)] -> [(Name, Docstring (Either Err PTerm))] -> [(Name, PTerm, Docstring (Either Err PTerm))]
-    zipParams i ((n, _, t) : rest) ((_, d) : rest') = (n, t, d) : (zipParams i rest rest')
-    zipParams i ((n, _, t) : rest) [] = (n, t, emptyDoc) : (zipParams i rest [])
-      where emptyDoc = annotCode (tryFullExpr rsyn i) emptyDocstring
-    zipParams _ [] [] = []
 
     paramName :: Name -> Name
     paramName (UN n) = sUN ("param_" ++ str n)
@@ -294,15 +265,6 @@ elabRecordFunctions info rsyn fc tyn params fields dconName target
       where
         fieldDep :: Name -> PTerm -> (Name, [Name])
         fieldDep n t = ((nsroot n), paramNames ++ fieldNames `intersect` allNamesIn t)
-
-    -- | A list of fields depending on another field.
-    dependentFields :: [Name]
-    dependentFields = filter depends fieldNames
-      where
-        depends :: Name -> Bool
-        depends n = case lookup n fieldDependencies of
-                      Just xs -> not $ null xs
-                      Nothing -> False
 
     -- | A list of fields depended on by other fields.
     dependedOn :: [Name]

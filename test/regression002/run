@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 ${IDRIS:-idris} $@ --nobanner --nocolour --quiet --port none <<!
+:load reg001.idr
+:load reg002.idr
 :load reg003.idr
 :load reg003a.idr
 :load reg006.idr
@@ -33,6 +35,7 @@ ${IDRIS:-idris} $@ --nobanner --nocolour --quiet --port none <<!
 :load reg077.idr
 :load DoubleEquality.idr
 :load Canonicity.idr
+:load Negation.idr
 !
 
 rm -f *.ibc

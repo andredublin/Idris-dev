@@ -1,7 +1,7 @@
 {-|
 Module      : Idris.Info
 Description : Get information about Idris.
-Copyright   : 2016 The Idris Community
+ 2016 The Idris Community
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
@@ -29,7 +29,6 @@ import Idris.Imports (installedPackages)
 import Idris.Options (loggingCatsStr)
 import qualified IRTS.System as S
 
-import Paths_idris
 import Version_idris (gitHash)
 
 import Data.Version

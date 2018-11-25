@@ -19,7 +19,7 @@ infix 5 \\
 infixr 7 ::,++
 
 ||| Generic lists
-%elim data List : (elem : Type) -> Type where
+data List : (elem : Type) -> Type where
   ||| Empty list
   Nil : List elem
   ||| A non-empty list, consisting of a head element and the rest of
@@ -95,8 +95,8 @@ inBounds (S k) (x :: xs) with (inBounds k xs)
 |||
 ||| Runs in linear time
 length : List a -> Nat
-length []      = 0
-length (x::xs) = 1 + length xs
+length []      = Z
+length (x::xs) = S (length xs)
 
 --------------------------------------------------------------------------------
 -- Indexing into lists
@@ -394,13 +394,14 @@ scanl1 f (x::xs) = scanl f x xs
 -- Transformations
 --------------------------------------------------------------------------------
 
+||| Reverse a list onto an existing tail.
+reverseOnto : List a -> List a -> List a
+reverseOnto acc [] = acc
+reverseOnto acc (x::xs) = reverseOnto (x::acc) xs
+
 ||| Return the elements of a list in reverse order.
 reverse : List a -> List a
-reverse = reverse' []
-  where
-    reverse' : List a -> List a -> List a
-    reverse' acc []      = acc
-    reverse' acc (x::xs) = reverse' (x::acc) xs
+reverse = reverseOnto []
 
 ||| Insert some separator between the elements of a list.
 |||
@@ -435,19 +436,19 @@ intercalate sep xss = concat $ intersperse sep xss
 |||
 |||     transpose [[], [1, 2]] = [[1], [2]]
 |||     transpose (transpose [[], [1, 2]]) = [[1, 2]]
-|||
-||| TODO: Solution which satisfies the totality checker?
 transpose : List (List a) -> List (List a)
 transpose [] = []
-transpose ([] :: xss) = transpose xss
-transpose ((x::xs) :: xss) = assert_total $ (x :: (mapMaybe head' xss)) :: (transpose (xs :: (map (drop 1) xss)))
+transpose (heads :: tails) = spreadHeads heads (transpose tails) where
+  spreadHeads []              tails           = tails
+  spreadHeads (head :: heads) []              = [head] :: spreadHeads heads []
+  spreadHeads (head :: heads) (tail :: tails) = (head :: tail) :: spreadHeads heads tails
 
 --------------------------------------------------------------------------------
 -- Membership tests
 --------------------------------------------------------------------------------
 
 ||| Check if something is a member of a list using a custom comparison.
-elemBy : (a -> a -> Bool) -> a -> List a -> Bool
+elemBy : %static (a -> a -> Bool) -> a -> List a -> Bool
 elemBy p e []      = False
 elemBy p e (x::xs) =
   if p e x then
@@ -460,7 +461,7 @@ elem : Eq a => a -> List a -> Bool
 elem = elemBy (==)
 
 ||| Find associated information in a list using a custom comparison.
-lookupBy : (a -> a -> Bool) -> a -> List (a, b) -> Maybe b
+lookupBy : %static (a -> a -> Bool) -> a -> List (a, b) -> Maybe b
 lookupBy p e []      = Nothing
 lookupBy p e (x::xs) =
   let (l, r) = x in
@@ -475,7 +476,7 @@ lookup = lookupBy (==)
 
 ||| Check if any elements of the first list are found in the second, using
 ||| a custom comparison.
-hasAnyBy : (a -> a -> Bool) -> List a -> List a -> Bool
+hasAnyBy : %static (a -> a -> Bool) -> List a -> List a -> Bool
 hasAnyBy p elems []      = False
 hasAnyBy p elems (x::xs) =
   if elemBy p x elems then
@@ -527,7 +528,7 @@ findIndices = findIndices' Z
         findIndices' (S cnt) p xs
 
 ||| Find the index of the first occurrence of an element in a list, using a custom equality test.
-elemIndexBy : (a -> a -> Bool) -> a -> List a -> Maybe Nat
+elemIndexBy : %static (a -> a -> Bool) -> a -> List a -> Maybe Nat
 elemIndexBy p e = findIndex $ p e
 
 ||| Find the index of the first occurrence of an element in a list,
@@ -536,7 +537,7 @@ elemIndex : Eq a => a -> List a -> Maybe Nat
 elemIndex = elemIndexBy (==)
 
 ||| Find all indices for an element in a list, using a custom equality test.
-elemIndicesBy : (a -> a -> Bool) -> a -> List a -> List Nat
+elemIndicesBy : %static (a -> a -> Bool) -> a -> List a -> List Nat
 elemIndicesBy p e = findIndices $ p e
 
 ||| Find all indices for an element in a list, using the default equality test for the type of list elements.
@@ -572,7 +573,7 @@ filterSmaller {p} (x :: xs) with (p x)
 
 ||| The nubBy function behaves just like nub, except it uses a user-supplied
 ||| equality predicate instead of the overloaded == function.
-nubBy : (a -> a -> Bool) -> List a -> List a
+nubBy : %static (a -> a -> Bool) -> List a -> List a
 nubBy = nubBy' []
   where
     nubBy' : List a -> (a -> a -> Bool) -> List a -> List a
@@ -595,7 +596,7 @@ nub : Eq a => List a -> List a
 nub = nubBy (==)
 
 ||| The deleteBy function behaves like delete, but takes a user-supplied equality predicate.
-deleteBy : (a -> a -> Bool) -> a -> List a -> List a
+deleteBy : %static (a -> a -> Bool) -> a -> List a -> List a
 deleteBy _  _ []      = []
 deleteBy eq x (y::ys) = if x `eq` y then ys else y :: deleteBy eq x ys
 
@@ -622,7 +623,7 @@ delete = deleteBy (==)
 (\\) =  foldl (flip delete)
 
 ||| The unionBy function returns the union of two lists by user-supplied equality predicate.
-unionBy : (a -> a -> Bool) -> List a -> List a -> List a
+unionBy : %static (a -> a -> Bool) -> List a -> List a -> List a
 unionBy eq xs ys = xs ++ foldl (flip (deleteBy eq)) (nubBy eq ys) xs
 
 ||| Compute the union of two lists according to their `Eq` implementation.
@@ -674,13 +675,18 @@ split p xs =
     (chunk, [])          => [chunk]
     (chunk, (c :: rest)) => chunk :: split p (assert_smaller xs rest)
 
-||| A tuple where the first element is a List of the n first elements and
-||| the second element is a List of the remaining elements of the list
-||| It is equivalent to (take n xs, drop n xs)
+||| A tuple where the first element is a `List` of the `n` first elements and
+||| the second element is a `List` of the remaining elements of the original.
+||| It is equivalent to `(take n xs, drop n xs)` (`splitAtTakeDrop`),
+||| but is more efficient.
+|||
 ||| @ n   the index to split at
-||| @ xs  the list to split in two
+||| @ xs  the `List` to split in two
 splitAt : (n : Nat) -> (xs : List a) -> (List a, List a)
-splitAt n xs = (take n xs, drop n xs)
+splitAt Z xs = ([], xs)
+splitAt (S k) [] = ([], [])
+splitAt (S k) (x :: xs) with (splitAt k xs)
+  | (tk, dr) = (x :: tk, dr)
 
 ||| The partition function takes a predicate a list and returns the pair of
 ||| lists of elements which do and do not satisfy the predicate, respectively;
@@ -747,7 +753,7 @@ replaceOn a b l = map (\c => if c == a then b else c) l
 ||| @ eq the equality comparison
 ||| @ left the potential prefix
 ||| @ right the list that may have `left` as its prefix
-isPrefixOfBy : (eq : a -> a -> Bool) -> (left, right : List a) -> Bool
+isPrefixOfBy : %static (eq : a -> a -> Bool) -> (left, right : List a) -> Bool
 isPrefixOfBy p [] right        = True
 isPrefixOfBy p left []         = False
 isPrefixOfBy p (x::xs) (y::ys) =
@@ -760,7 +766,7 @@ isPrefixOfBy p (x::xs) (y::ys) =
 isPrefixOf : Eq a => List a -> List a -> Bool
 isPrefixOf = isPrefixOfBy (==)
 
-isSuffixOfBy : (a -> a -> Bool) -> List a -> List a -> Bool
+isSuffixOfBy : %static (a -> a -> Bool) -> List a -> List a -> Bool
 isSuffixOfBy p left right = isPrefixOfBy p (reverse left) (reverse right)
 
 ||| The isSuffixOf function takes two lists and returns True iff the first list is a suffix of the second.
@@ -795,7 +801,7 @@ sorted (x::xs) =
 ||| Merge two sorted lists using an arbitrary comparison
 ||| predicate. Note that the lists must have been sorted using this
 ||| predicate already.
-mergeBy : (a -> a -> Ordering) -> List a -> List a -> List a
+mergeBy : %static (a -> a -> Ordering) -> List a -> List a -> List a
 mergeBy order []      right   = right
 mergeBy order left    []      = left
 mergeBy order (x::xs) (y::ys) =
@@ -811,7 +817,7 @@ merge = mergeBy compare
 |||
 ||| @ cmp how to compare elements
 ||| @ xs the list to sort
-sortBy : (cmp : a -> a -> Ordering) -> (xs : List a) -> List a
+sortBy : %static (cmp : a -> a -> Ordering) -> (xs : List a) -> List a
 sortBy cmp []  = []
 sortBy cmp [x] = [x]
 sortBy cmp xs  = let (x, y) = split xs in
@@ -855,9 +861,39 @@ catMaybes (x::xs) =
 -- Properties
 --------------------------------------------------------------------------------
 
+Uninhabited ([] = _ :: _) where
+  uninhabited Refl impossible
+
+Uninhabited (_ :: _ = []) where
+  uninhabited Refl impossible
+
 ||| (::) is injective
-consInjective : (x :: xs) = (y :: ys) -> (x = y, xs = ys)
+consInjective : {x : a} -> {xs : List a} -> {y : b} -> {ys : List b} ->
+                (x :: xs) = (y :: ys) -> (x = y, xs = ys)
 consInjective Refl = (Refl, Refl)
+
+||| Two lists are equal, if their heads are equal and their tails are equal.
+consCong2 : {x : a} -> {xs : List a} -> {y : b} -> {ys : List b} ->
+            x = y -> xs = ys -> x :: xs = y :: ys
+consCong2 Refl Refl = Refl
+
+||| Appending pairwise equal lists gives equal lists
+appendCong2 : {x1 : List a} -> {x2 : List a} ->
+              {y1 : List b} -> {y2 : List b} ->
+              x1 = y1 -> x2 = y2 -> x1 ++ x2 = y1 ++ y2
+appendCong2 {x1=[]} {y1=(_ :: _)} Refl _ impossible
+appendCong2 {x1=(_ :: _)} {y1=[]} Refl _ impossible
+appendCong2 {x1=[]} {y1=[]} _ eq2 = eq2
+appendCong2 {x1=(_ :: _)} {y1=(_ :: _)} eq1 eq2 =
+  consCong2
+    (fst $ consInjective eq1)
+    (appendCong2 (snd $ consInjective eq1) eq2)
+
+||| List.map is distributive over appending.
+mapAppendDistributive : (f : a -> b) -> (x : List a) -> (y : List a) ->
+                        map f (x ++ y) = map f x ++ map f y
+mapAppendDistributive _ [] _ = Refl
+mapAppendDistributive f (_ :: xs) y = cong $ mapAppendDistributive f xs y
 
 ||| The empty list is a right identity for append.
 appendNilRightNeutral : (l : List a) ->
@@ -930,3 +966,12 @@ foldlAsFoldr f z t = foldr (flip (.) . flip f) id t z
 foldlMatchesFoldr : (f : b -> a -> b) -> (q : b) -> (xs : List a) -> foldl f q xs = foldlAsFoldr f q xs
 foldlMatchesFoldr f q [] = Refl
 foldlMatchesFoldr f q (x :: xs) = foldlMatchesFoldr f (f q x) xs
+
+splitAtTakeDrop : (n : Nat) -> (xs : List a) -> splitAt n xs = (take n xs, drop n xs)
+splitAtTakeDrop Z xs = Refl
+splitAtTakeDrop (S k) [] = Refl
+splitAtTakeDrop (S k) (x :: xs) with (splitAt k xs) proof p
+  | (tk, dr) = let prf = trans p (splitAtTakeDrop k xs)
+                in aux (cong {f=(x ::) . fst} prf) (cong {f=snd} prf)
+  where aux : {a, b : Type} -> {w, x : a} -> {y, z : b} -> w = x -> y = z -> (w, y) = (x, z)
+        aux Refl Refl = Refl

@@ -1,42 +1,71 @@
 {-|
 Module      : Idris.Imports
 Description : Code to handle import declarations.
-Copyright   :
+
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
 module Idris.Imports(
     IFileType(..), findIBC, findImport, findInPath, findPkgIndex
   , ibcPathNoFallback, installedPackages, pkgIndex
+  , PkgName, pkgName, unPkgName, unInitializedPkgName
   ) where
 
 import Idris.AbsSyntax
 import Idris.Core.TT
 import Idris.Error
-import Idris.Output
 import IRTS.System (getIdrisLibDir)
 
 import Control.Applicative ((<$>))
 import Control.Monad.State.Strict
+import Data.Char (isAlpha, isDigit, toLower)
 import Data.List (isSuffixOf)
 import System.Directory
 import System.FilePath
 
 data IFileType = IDR FilePath | LIDR FilePath | IBC FilePath IFileType
-    deriving (Show, Eq)
+    deriving (Show, Ord)
+
+instance Eq IFileType where
+    IDR x == IDR y = x == y
+    LIDR x == LIDR y = x == y
+    IBC x _ == IBC y _ = x == y
+    _ == _ = False
+
+newtype PkgName = PkgName String
+
+unPkgName :: PkgName -> String
+unPkgName (PkgName s) = map toLower s
+
+instance Show PkgName where
+    show (PkgName pkg) = pkg
+instance Eq PkgName where
+    a == b = unPkgName a == unPkgName b
+
+unInitializedPkgName :: PkgName
+unInitializedPkgName = PkgName ""
+
+pkgName :: String -> Either String PkgName
+pkgName ""      = Left "empty package name"
+pkgName s@(f:l)
+    | not $ isAlpha f =
+        Left "package name need to start by a letter"
+    | not $ all (\c -> isAlpha c || isDigit c || c `elem` "-_") l =
+        Left "package name need to contain only letter, digits, and -_"
+    | otherwise = Right $ PkgName s
 
 -- | Get the index file name for a package name
-pkgIndex :: String -> FilePath
-pkgIndex s = "00" ++ s ++ "-idx.ibc"
+pkgIndex :: PkgName -> FilePath
+pkgIndex s = "00" ++ unPkgName s ++ "-idx.ibc"
 
 srcPath :: FilePath -> FilePath
-srcPath fp = let (n, ext) = splitExtension fp in
+srcPath fp = let (_, ext) = splitExtension fp in
                  case ext of
                     ".idr" -> fp
                     _ -> fp ++ ".idr"
 
 lsrcPath :: FilePath -> FilePath
-lsrcPath fp = let (n, ext) = splitExtension fp in
+lsrcPath fp = let (_, ext) = splitExtension fp in
                   case ext of
                      ".lidr" -> fp
                      _ -> fp ++ ".lidr"
@@ -97,7 +126,7 @@ findInPath (d:ds) fp = do let p = d </> fp
                           e <- doesFileExist' p
                           if e then return p else findInPath ds fp
 
-findPkgIndex :: String -> Idris FilePath
+findPkgIndex :: PkgName -> Idris FilePath
 findPkgIndex p = do let idx = pkgIndex p
                     ids <- allImportDirs
                     runIO $ findInPath ids idx

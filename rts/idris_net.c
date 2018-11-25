@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifndef WIN32
+#ifndef _WIN32
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #else
@@ -58,7 +58,7 @@ void idrnet_free(void* ptr) {
 
 
 int idrnet_socket(int domain, int type, int protocol) {
-#ifdef WIN32
+#ifdef _WIN32
     if (!check_init()) {
         return -1;
     }
@@ -150,7 +150,7 @@ void* idrnet_create_sockaddr() {
 
 int idrnet_accept(int sockfd, void* sockaddr) {
     struct sockaddr* addr = (struct sockaddr*) sockaddr;
-    socklen_t addr_size = 0;
+    socklen_t addr_size = sizeof(struct sockaddr_storage);
     return accept(sockfd, addr, &addr_size);
 }
 

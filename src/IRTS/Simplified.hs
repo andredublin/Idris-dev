@@ -1,7 +1,7 @@
 {-|
 Module      : IRTS.Simplified
 Description : Simplified expressions, where functions/constructors can only be applied to variables.
-Copyright   :
+
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
@@ -10,12 +10,9 @@ module IRTS.Simplified(simplifyDefs, SDecl(..), SExp(..), SAlt(..)) where
 
 import Idris.Core.CaseTree
 import Idris.Core.TT
-import Idris.Core.Typecheck
 import IRTS.Defunctionalise
 
 import Control.Monad.State
-import Data.Maybe
-import Debug.Trace
 
 data SExp = SV LVar
           | SApp Bool Name [LVar]

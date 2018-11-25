@@ -91,7 +91,10 @@ external ``C`` libraries, the following options are available:
 
 + ``makefile = <file>``, which specifies a ``Makefile``, to be built
   before the Idris modules, for example to support linking with a
-  ``C`` library.
+  ``C`` library. When building, Idris sets the environment variables
+  ``IDRIS_INCLUDES`` (with C include flags) and ``IDRIS_LDFLAGS``
+  (with C linking flags) so they can be used from inside the
+  ``Makefile``.
 
 + ``libs = <libs>``, which takes a comma separated list of libraries
   which must be present for the package to be usable.
@@ -120,7 +123,7 @@ Package files support comments using the standard Idris singleline ``--`` and mu
 Using Package files
 ===================
 
-Given an Idris package file ``text.ipkg`` it can be used with the Idris compiler as follows:
+Given an Idris package file ``test.ipkg`` it can be used with the Idris compiler as follows:
 
 + ``idris --build test.ipkg`` will build all modules in the package
 

@@ -9,11 +9,9 @@ Maintainer  : The Idris Community.
 {-# LANGUAGE Arrows #-}
 
 module Idris.CmdOptions
-  (
-    module Idris.CmdOptions
-  , opt
-  , getClient, getPkg, getPkgCheck, getPkgClean, getPkgMkDoc
-  , getPkgREPL, getPkgTest, getPort, getIBCSubDir
+  ( opt, getClient, getPkg, getPkgCheck, getPkgClean, getPkgMkDoc,
+    getPkgREPL, getPkgTest, getPort, getIBCSubDir,
+    pureArgParser, execArgParserPure, runArgParser
   ) where
 
 import Idris.Info (getIdrisVersion)
@@ -75,10 +73,13 @@ runArgParser = do opts <- execParser $ info parser
                                         PP.empty,
                                         PP.indent 4 (PP.text "http://www.idris-lang.org/")]
 
+execArgParserPure :: [String] -> ParserResult [Opt]
+execArgParserPure args = preProcOpts <$> execParserPure (prefs idm) (info parser idm) args
+
 pureArgParser :: [String] -> [Opt]
-pureArgParser args = case getParseResult $ execParserPure (prefs idm) (info parser idm) args of
+pureArgParser args = case getParseResult (execArgParserPure args) of
   Just opts -> preProcOpts opts
-  Nothing -> []
+  Nothing   -> []
 
 parser :: Parser [Opt]
 parser = runA $ proc () -> do
@@ -221,8 +222,8 @@ parseFlags = many $
 
   <|> flag' DumpHighlights (long "highlight" <> help "Emit source code highlighting")
 
-  <|> flag' NoElimDeprecationWarnings      (long "no-elim-deprecation-warnings"   <> help "Disable deprecation warnings for %elim")
   <|> flag' NoOldTacticDeprecationWarnings (long "no-tactic-deprecation-warnings" <> help "Disable deprecation warnings for the old tactic sublanguage")
+  <|> flag' AllowCapitalizedPatternVariables (long "allow-capitalized-pattern-variables" <> help "Allow pattern variables to be capitalized")
 
     where
       getExt :: String -> LanguageExt

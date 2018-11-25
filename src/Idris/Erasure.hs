@@ -1,7 +1,7 @@
 {-|
 Module      : Idris.Erasure
 Description : Utilities to erase stuff not necessary for runtime.
-Copyright   :
+
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
@@ -20,7 +20,6 @@ import Idris.Primitives
 
 import Prelude hiding (id, (.))
 
-import Control.Applicative
 import Control.Arrow
 import Control.Category
 import Control.Monad.State
@@ -36,8 +35,6 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (pack)
 import qualified Data.Text as T
-import Debug.Trace
-import System.IO.Unsafe
 
 -- | UseMap maps names to the set of used (reachable) argument
 -- positions.
@@ -290,7 +287,6 @@ buildDepMap ci used externs ctx startNames
         -- mini-DSL for postulates
         (==>) ds rs = (S.fromList ds, M.fromList [(r, S.empty) | r <- rs])
         it n is = [(sUN n, Arg i) | i <- is]
-        mn n is = [(MN 0 $ pack n, Arg i) | i <- is]
 
         -- believe_me is special because it does not use all its arguments
         specialPrims = S.fromList [sUN "prim__believe_me"]
@@ -480,7 +476,7 @@ buildDepMap ci used externs ctx startNames
 
         -- let-bound variables can get partially evaluated
         -- it is sufficient just to plug the Cond in when the bound names are used
-        |  Let ty t <- bdr = var t cd `union` getDepsTerm vs ((n, const M.empty) : bs) cd body
+        | Let rig ty t <- bdr = var t cd `union` getDepsTerm vs ((n, const M.empty) : bs) cd body
         | NLet ty t <- bdr = var t cd `union` getDepsTerm vs ((n, const M.empty) : bs) cd body
       where
         var t cd = getDepsTerm vs bs cd t
@@ -533,7 +529,7 @@ buildDepMap ci used externs ctx startNames
             Bind n (Lam _ ty) t -> getDepsTerm vs bs cd (lamToLet app)
 
             -- and we interpret applied lets as lambdas
-            Bind n ( Let ty t') t -> getDepsTerm vs bs cd (App Complete (Bind n (Lam RigW ty) t) t')
+            Bind n (Let _ ty t') t -> getDepsTerm vs bs cd (App Complete (Bind n (Lam RigW ty) t) t')
             Bind n (NLet ty t') t -> getDepsTerm vs bs cd (App Complete (Bind n (Lam RigW ty) t) t')
 
             Proj t i
@@ -576,6 +572,9 @@ buildDepMap ci used externs ctx startNames
     getDepsTerm vs bs cd (Proj t (-1)) = getDepsTerm vs bs cd t  -- naturals, (S n) -> n
     getDepsTerm vs bs cd (Proj t i) = error $ "cannot[1] analyse projection !" ++ show i ++ " of " ++ show t
 
+    -- inferred term
+    getDepsTerm vs bs cd (Inferred t) = getDepsTerm vs bs cd t
+
     -- the easy cases
     getDepsTerm vs bs cd (Constant _) = M.empty
     getDepsTerm vs bs cd (TType    _) = M.empty
@@ -613,7 +612,7 @@ buildDepMap ci used externs ctx startNames
         (f, args) = unApply tm
 
     lamToLet' :: [Term] -> Term -> Term
-    lamToLet' (v:vs) (Bind n (Lam _ ty) tm) = Bind n (Let ty v) $ lamToLet' vs tm
+    lamToLet' (v:vs) (Bind n (Lam rig ty) tm) = Bind n (Let rig ty v) $ lamToLet' vs tm
     lamToLet'    []  tm = tm
     lamToLet'    vs  tm = error $
         "Erasure.hs:lamToLet': unexpected input: "
@@ -626,9 +625,6 @@ buildDepMap ci used externs ctx startNames
 
     union :: Deps -> Deps -> Deps
     union = M.unionWith (M.unionWith S.union)
-
-    unions :: [Deps] -> Deps
-    unions = M.unionsWith (M.unionWith S.union)
 
     unionMap :: (a -> Deps) -> [a] -> Deps
     unionMap f = M.unionsWith (M.unionWith S.union) . map f

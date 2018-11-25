@@ -27,6 +27,12 @@ data Maybe : (a : Type) -> Type where
 -- Syntactic tests
 --------------------------------------------------------------------------------
 
+Uninhabited (Nothing = Just _) where
+  uninhabited Refl impossible
+
+Uninhabited (Just _ = Nothing) where
+  uninhabited Refl impossible
+
 isNothing : Maybe a -> Bool
 isNothing Nothing  = True
 isNothing (Just j) = False
@@ -93,6 +99,12 @@ maybe_bind (Just x) k = k x
   Nothing  == (Just _) = False
   (Just _) == Nothing  = False
   (Just a) == (Just b) = a == b
+
+(Ord a) => Ord (Maybe a) where
+  compare Nothing  Nothing  = EQ
+  compare Nothing  (Just _) = LT
+  compare (Just _) Nothing  = GT
+  compare (Just a) (Just b) = compare a b
 
 ||| Prioritised choice. Just like the `Alternative` implementation, the
 ||| `Semigroup` for `Maybe a` keeps the first succeeding computation.

@@ -1,13 +1,21 @@
 {-|
 Module      : Idris.Options
 Description : Compiler options for Idris.
-Copyright   :
+
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
 {-# LANGUAGE DeriveDataTypeable, DeriveFunctor, DeriveGeneric, PatternGuards #-}
 
-module Idris.Options where
+module Idris.Options (Codegen(..), ConsoleWidth(..), HowMuchDocs(..), IRFormat(..),
+                      LanguageExt(..), LogCat(..), Opt(..), Optimisation(..),
+                      OutputFmt(..), REPLPort(..), codegenCats, elabCats, getBC,
+                      getClient, getCodegen, getCodegenArgs, getColour, getConsoleWidth,
+                      getEvalExpr, getExecScript, getFile, getIBCSubDir, getImportDir,
+                      getLanguageExt, getOptLevel, getOptimisation, getOutput,
+                      getOutputTy, getPkg, getPkgCheck, getPkgClean, getPkgDir,
+                      getPkgIndex, getPkgMkDoc, getPkgREPL, getPkgTest, getPort,
+                      getSourceDir, loggingCatsStr, opt, parserCats, strLogCat) where
 
 import Data.Maybe
 import GHC.Generics (Generic)
@@ -85,8 +93,8 @@ data Opt = Filename String
          | UseConsoleWidth ConsoleWidth
          | DumpHighlights
          | DesugarNats
-         | NoElimDeprecationWarnings      -- ^ Don't show deprecation warnings for %elim
          | NoOldTacticDeprecationWarnings -- ^ Don't show deprecation warnings for old-style tactics
+         | AllowCapitalizedPatternVariables -- ^ Allow pattern variables to be capitalized
     deriving (Show, Eq, Generic)
 
 

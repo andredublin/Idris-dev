@@ -8,7 +8,7 @@ Dec0 : Type -> Type
 Dec0 = Dec
 
 Dec1 : {A : Type} -> (P : A -> Type) -> Type
-Dec1 {A} P = (a : A) -> Dec0 (P a)
+Dec1 {A=aTy} p = (a : aTy) -> Dec0 (p a)
 
 Unique : Type -> Type
 Unique t = (p : t) -> (q : t) -> p = q
@@ -18,11 +18,6 @@ Unique0 = Unique
 
 Unique1 : (t0 -> Type) -> Type
 Unique1 {t0} t1 = (v : t0) -> Unique0 (t1 v)
-
-namespace Iso
-
-  from : {A, B : Type} -> Iso A B -> (B -> A)
-  from (MkIso to from toFrom fromTo) = from
 
 namespace Fin
 
@@ -41,7 +36,7 @@ namespace Finite
 
   ||| Notion of finiteness for types
   Finite : Type -> Type
-  Finite A = Exists (\ n => Iso A (Fin n))
+  Finite a = Exists (\ n => Iso a (Fin n))
 
   ||| Cardinality of finite types
   card : {A : Type} -> (fA : Finite A) -> Nat

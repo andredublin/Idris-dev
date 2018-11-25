@@ -1,7 +1,167 @@
-# New in 1.1.*
+# New in next version
 
-+ Addition of `Text.Literate`, a module for working with literate
-  source files.
+## Tool updates
++ Modules no longer require building if imports have changed but all
+  interfaces (i.e. types for names declared `export` and definitions of names
+  declared `public export`) are unchanged.
+
+# New in 1.3.1
+
+## Tool updates
++ Fixes for building with GHC 8.6
++ Fix for megaparsec update
++ Some fixes for memory allocation issues in the C back end
+
+# New in 1.3.0
+
+## Language updates
++ Old 'induction' tactics and eliminator generation functionality ('%elim', '%case', 'elim_for') is no longer supported.
+  Please, rely on the ones provided by Pruviloj and elaborator reflection instead.
+
+## Library updates
+
++ Changed rndInt in Effect.Random so that it does not alternate between odd
+  and even.
++ Additions to `contrib`:
+  * `Data.SortedBag`: Bag (or Multiset) implemention based on `Data.SortedMap`.
+  * `Data.PosNat`: A `Nat` paired with a proof that it is positive.
+  * `Data.Chain`: A function with an arbitrary number of arguments, plus
+    combinators for working with them.
+
+## Tool updates
++ Added a switch `--allow-capitalized-pattern-variables` to optionally allow capitalized pattern variables after they were prohibited in 1.2.0.
++ REPL now prints an error message if program compiled by `:exec` terminates
+  abnormally.
++ Idris now builds with GHC 8.4.
++ In the C backend, the representation of Idris values at runtime has been reworked.
+
+# New in 1.2.0
+
+## Language updates
+
++ In `@`-patterns such as `x@p`, `x` is now in scope on the right-hand side
+  of any definitions in `where` clauses, provided the left-hand side of the
+  definition does not shadow it.
++ The `LinearTypes` language extension has been revised. It implements the
+  rules from Bob Atkey's draft "The Syntax and Semantics of Quantitative
+  Type Theory" and now works with holes and case expressions.
++ Backticked operators can appear in sections, e.g. ``(`LTE` 42)`` or
+  ``(1 `plus`)``.
++ Backticked operators can have their precendence and associativity set like
+  other operators, e.g. ``infixr 8 `cons` ``.  Backticked operators with
+  undeclared fixity are treated as non-associative with precedence lower
+  than all declared operators.
++ Allow non-injective implementations if explicitly named, e.g.,
+  ```idris
+  LTB : Nat -> Type
+  LTB b = DPair Nat (\ n  => LT n b)
+
+  implementation [uninhabltb] Uninhabited (LTB Z) where
+    uninhabited (MkDPair n prf) = absurd prf
+  ```
+  It is possible to use `using implementation uninhabltb` to add the
+  implementation to the automated resolution, but if it fails to find the
+  instance due to non-injectivity, one must pass it explicitly to target
+  function, i.e. `absurd @{uninhabltb}`.
++ Verbatim strings now support trailing quote characters. All quote characters
+  until the final three are considered part of the string. Now a string such as
+  `""""hello""""` will parse, and is equivalent to `"\"hello\""`.
++ C FFI now supports pasting in any expression by prefixing it with '#', e.g.
+  ```idris
+  intMax : IO Int
+  intMax = foreign FFI_C "#INT_MAX" (IO Int)
+  ```
++ The deprecated keywords `%assert_total`, `abstract`, and `[static]` have
+  been removed as well as the use of "public" instead of "public export" to
+  expose a symbol.
++ The syntax for pattern-match alternatives now works for `let` statements in
+  `do` blocks in addition to `let` expressions and `<-` statements, e.g.
+  ```idris
+    do …
+       let Just x = expr | Nothing => empty
+       …
+  ```
+  This means that a `with`-application (using `|`) cannot be used in that
+  position anymore.
+
+## Library Updates
+
++ Removed `oldeffects` library from `libs` folder, use `effects` or `Control.ST` instead.
++ Added `Text.Literate`, a module for working with literate source files.
++ Added `Data.IORef`, for working with mutable references in `IO` and `JS_IO`.
++ Added `discriminate` and `construct` tactics to Pruviloj.
++ Added `IsSucc` type to `Prelude`, which proves that a `Nat` is a successor.
++ Added `Data.IOArray`, containing primitives for mutable arrays.
++ Added `Language.JSON`, for total serialization/deserialization of JSON data.
++ Reworked operator fixity for many operators.
+  * Changed `&&` and `||` to be right-associative. Increased precedence of `&&`
+    to be higher than that of `||`.
+  * Removed associativity from Boolean comparison operators `==`, `/=`, `<`, `<=`,
+    `>`, and `>=`. Increased precedence of `/=` and `==` to match the others.
+  * Made `<|>`, `<$>`, and `.` right-associative.
+  * Swapped precedence of `<|>` and `<*>` (and its related operators, `<*` and
+    `*>`). Now `<|>` has a lower precedence.
+  * Lowered the precedence of `>>=` to be below that of `<|>`.
++ Added some useful string manipulation functions to `Data.String.Extra`.
++ Added `Control.Delayed`, a module for conditionally making a type `Inf` or `Lazy`.
++ Added `Data.Fuel`, which implements the `Fuel` data type and the partial `forever` function.
++ Added `Data.Bool.Extra`, a module with properties of boolean operations.
++ Moved core of `Text.Lexer` to `Text.Lexer.Core`. Added several new combinators
+  and lexers to `Text.Lexer`.
++ Moved core of `Text.Parser` to `Text.Parser.Core`. Added several new combinators
+  to `Text.Parser`. Made the following changes.
+  * Flipped argument order of `parse`.
+  * Renamed `optional` to `option` and flip argument order.
+  * Renamed `maybe` to `optional`.
+  * Generalised many combinators to use an unknown `commit` flag where possible.
++ `Prelude.Doubles.atan2` is now implemented as a primitive instead of
+  being coded in Idris.
++ Added `Test.Unit` to `contrib` for simple unit testing.
++ Removed several deprecated items from the libraries shipped with Idris.
++ Moved `abs` from the `Neg` interface into its own `Abs` interface.  `Nat`
+  implements `Abs` with `abs = id`.
++ Added `Control.ST.File`, an ST based implementation of the same behaviour
+  implemented by `Effect.File` in the effects package.
+
+## Tool Updates
+
++ Private functions are no longer visible in the REPL except for modules
+  that are explicitly loaded.
++ The --interface option now creates CommonJS modules on the node backend.
++ The C backend now pass arguments to the C compiler in the same order
+  as they were given in the source files.
++ Backslash, braces and percent symbols are now correctly pretty printed
+  in LaTeX.
++ Errors and warnings now consistently have the following format:
+  ```idris
+  reg068.idr:1:6-8:
+    |
+  1 | data nat : Type where --error
+    |      ~~~
+  Main.nat has a name which may be implicitly bound.
+  This is likely to lead to problems!
+  ```
+  The code is highlighted when highlighting information is available.  How
+  much highlighting information is available depends on where the error
+  occurred.
++ The parser provider has been switched from Trifecta to Megaparsec.  This
+  could possibly cause some subtle deviations in parsing from previous
+  versions of Idris.
++ Many more errors now report beginning *and* ending position (which may be
+  on different lines), instead of just a single point.  The format is
+  `Foo.idr:9:7-15:` if ending column is on the same line or
+  `Foo.idr:9:7-10:15:` if the ending column is on a different line.
++ Error messages were changed so that the last column is inclusive, e.g.
+  `Foo.idr:9:7-15:` includes column 15.  Previously the error would have read
+  `Foo.idr:9:7-16:`.
+
+## Packaging Updates
+
++ Package names now only accept a restrictive charset of letters, numbers and the `-_` characters.
+  Package names are also case insensitive.
++ When building makefiles for the FFI, the environment variables
+  `IDRIS_INCLUDES` and `IDRIS_LDFLAGS` are now set with the correct C
+  flags.
 
 # New in 1.1.1
 

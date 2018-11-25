@@ -1,11 +1,11 @@
 {-|
 Module      : IRTS.JavaScript.Codegen
 Description : The JavaScript common code generator.
-Copyright   :
+
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP, OverloadedStrings #-}
 
 module IRTS.JavaScript.Codegen( codegenJs
                               , CGConf(..)
@@ -14,6 +14,7 @@ module IRTS.JavaScript.Codegen( codegenJs
 
 import Idris.Core.TT
 import IRTS.CodegenCommon
+import IRTS.Exports
 import IRTS.JavaScript.AST
 import IRTS.JavaScript.LangTransforms
 import IRTS.JavaScript.Name
@@ -39,7 +40,6 @@ import System.Directory (doesFileExist)
 import System.Environment
 import System.FilePath
 
-
 -- | Code generation stats hold information about the generated user
 -- code. Based on that information we add additional code to make
 -- things work.
@@ -47,6 +47,11 @@ data CGStats = CGStats { usedBigInt :: Bool
                        , partialApplications :: Set Partial
                        , hiddenClasses :: Set HiddenClass
                        }
+
+#if (MIN_VERSION_base(4,11,0))
+instance Semigroup CGStats where
+    (<>) = mappend
+#endif
 
 -- If we generate code for two declarations we want to merge their code
 -- generation stats.
@@ -89,6 +94,7 @@ includeLibs =
     repl '\\' = '_'
     repl '/' = '_'
     repl '.' = '_'
+    repl '-' = '_'
     repl c   = c
   in
     concatMap (\lib -> "var " ++ (repl <$> lib) ++ " = require(\"" ++ lib ++"\");\n")
@@ -98,6 +104,28 @@ isYes (Just "Y") = True
 isYes (Just "y") = True
 isYes _ = False
 
+makeExportDecls :: Map Name LDecl -> ExportIFace -> [Text]
+makeExportDecls defs (Export _ _ e) =
+  concatMap makeExport e
+  where
+    uncurryF name argTy (Just args) =
+      if length argTy == length args then name
+        else T.concat [ "function(){ return "
+                      , name
+                      , ".apply(this, Array.prototype.slice.call(arguments, 0,", T.pack $ show $ length args,"))"
+                      , T.concat $ map (\x -> T.concat ["(arguments[", T.pack $ show x , "])"]) [length args .. (length argTy - 1)]
+                      , "}"
+                      ]
+    uncurryF name argTy Nothing = name
+
+    makeExport (ExportData _) =
+      []
+    makeExport (ExportFun name (FStr exportname) retTy argTy) =
+      [T.concat [ T.pack $ exportname
+                ,  ": "
+                , uncurryF (jsName name) argTy (getArgList' name defs)
+                ]
+      ]
 
 codegenJs :: CGConf -> CodeGenerator
 codegenJs conf ci =
@@ -105,7 +133,10 @@ codegenJs conf ci =
     debug <- isYes <$> lookupEnv "IDRISJS_DEBUG"
     let defs' = Map.fromList $ liftDecls ci
     let defs = globlToCon defs'
-    let used = Map.elems $ removeDeadCode defs [sMN 0 "runMain"]
+    let iface = interfaces ci
+    let used = if iface then
+                  Map.elems $ removeDeadCode defs (getExpNames $ exportDecls ci)
+                  else Map.elems $ removeDeadCode defs [sMN 0 "runMain"]
     when debug $ do
         writeFile (outputFile ci ++ ".LDeclsDebug") $ (unlines $ intersperse "" $ map show used) ++ "\n\n\n"
         putStrLn $ "Finished calculating used"
@@ -136,7 +167,8 @@ codegenJs conf ci =
                                              , doPartials (partialApplications stats), "\n"
                                              , doHiddenClasses (hiddenClasses stats), "\n"
                                              , out, "\n"
-                                             , jsName (sMN 0 "runMain"), "();\n"
+                                             , if iface then T.concat ["module.exports = {\n", T.intercalate ",\n" $ concatMap (makeExportDecls defs) (exportDecls ci), "\n};\n"]
+                                                  else jsName (sMN 0 "runMain") `T.append` "();\n"
                                              , "}.call(this))"
                                              , footer conf
                                              ]
@@ -223,13 +255,17 @@ getConsId n =
         Just (LConstructor _ conId arity) -> pure (conId, arity)
         _ -> error $ "Internal JS Backend error " ++ showCG n ++ " is not a constructor."
 
+getArgList' :: Name -> Map Name LDecl -> Maybe [Name]
+getArgList' n defs =
+    case Map.lookup n defs of
+      Just (LFun _ _ a _) -> Just a
+      _ -> Nothing
+
 getArgList :: Name -> State CGBodyState (Maybe [Name])
 getArgList n =
   do
     st <- get
-    case Map.lookup n (defs st) of
-      Just (LFun _ _ a _) -> pure $ Just a
-      _ -> pure Nothing
+    pure $ getArgList' n (defs st)
 
 data BodyResTarget = ReturnBT
                    | DecBT Text

@@ -14,7 +14,7 @@ import Prelude.Uninhabited
 
 ||| Natural numbers: unbounded, unsigned integers which can be pattern
 ||| matched.
-%elim data Nat =
+data Nat =
   ||| Zero
   Z |
   ||| Successor
@@ -24,6 +24,9 @@ import Prelude.Uninhabited
 %name Nat k,j,i,n,m
 
 Uninhabited (Z = S n) where
+  uninhabited Refl impossible
+
+Uninhabited (S n = Z) where
   uninhabited Refl impossible
 
 --------------------------------------------------------------------------------
@@ -37,6 +40,19 @@ isZero (S n) = False
 total isSucc : Nat -> Bool
 isSucc Z     = False
 isSucc (S n) = True
+
+
+||| Proof that `n` is not equal to Z
+data IsSucc : (n : Nat) -> Type where
+  ItIsSucc : IsSucc (S n)
+
+Uninhabited (IsSucc Z) where
+  uninhabited ItIsSucc impossible
+
+||| A decision procedure for `IsSucc`
+isItSucc : (n : Nat) -> Dec (IsSucc n)
+isItSucc Z = No absurd
+isItSucc (S n) = Yes ItIsSucc
 
 --------------------------------------------------------------------------------
 -- Basic arithmetic functions
@@ -227,6 +243,9 @@ Num Nat where
   (*) = mult
 
   fromInteger = fromIntegerNat
+
+Abs Nat where
+  abs = id
 
 MinBound Nat where
   minBound = Z

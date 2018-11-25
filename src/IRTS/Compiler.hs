@@ -1,7 +1,7 @@
 {-|
 Module      : IRTS.Compiler
 Description : Coordinates the compilation process.
-Copyright   :
+
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
@@ -10,7 +10,6 @@ Maintainer  : The Idris Community.
 module IRTS.Compiler(compile, generate) where
 
 import Idris.AbsSyntax
-import Idris.AbsSyntaxTree
 import Idris.ASTUtils
 import Idris.Core.CaseTree
 import Idris.Core.Evaluate
@@ -21,33 +20,24 @@ import Idris.Options
 import Idris.Output
 import IRTS.CodegenC
 import IRTS.CodegenCommon
-import IRTS.CodegenJavaScript
 import IRTS.Defunctionalise
 import IRTS.DumpBC
 import IRTS.Exports
 import IRTS.Inliner
-import IRTS.Lang
 import IRTS.LangOpts
 import IRTS.Portable
 import IRTS.Simplified
 
 import Prelude hiding (id, (.))
 
-import Control.Applicative
 import Control.Category
 import Control.Monad.State
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IS
 import Data.List
 import qualified Data.Map as M
-import Data.Maybe
 import Data.Ord
 import qualified Data.Set as S
-import Debug.Trace
 import System.Directory
-import System.Environment
 import System.Exit
-import System.FilePath (addTrailingPathSeparator, (</>))
 import System.IO
 import System.Process
 
@@ -91,7 +81,14 @@ compile codegen f mtm = do
         let defsUniq = map (allocUnique (addAlist defsInlined emptyContext))
                            defsInlined
 
-        let (nexttag, tagged) = addTags 65536 (liftAll defsUniq)
+        logCodeGen 1 "Inlining"
+
+        dumpCases <- getDumpCases
+        case dumpCases of
+            Nothing -> return ()
+            Just f -> runIO $ writeFile f (showCaseTrees defsUniq)
+
+        let (nexttag, tagged) = addTags 65536 (liftAll defsInlined)
         let ctxtIn = addAlist tagged emptyContext
 
         logCodeGen 1 "Defunctionalising"
@@ -106,11 +103,7 @@ compile codegen f mtm = do
 
         let checked = simplifyDefs defuns (toAlist defuns)
         outty <- outputTy
-        dumpCases <- getDumpCases
         dumpDefun <- getDumpDefun
-        case dumpCases of
-            Nothing -> return ()
-            Just f -> runIO $ writeFile f (showCaseTrees defs)
         case dumpDefun of
             Nothing -> return ()
             Just f -> runIO $ writeFile f (dumpDefuns defuns)
@@ -152,7 +145,7 @@ generate codegen mainmod ir
                                         return fn
                        let cmd = "idris-codegen-" ++ cg
                            args = [input, "-o", outputFile ir] ++ compilerFlags ir
-                       exit <- rawSystem cmd args
+                       exit <- rawSystem cmd (if interfaces ir then "--interface" : args else args)
                        when (exit /= ExitSuccess) $
                             putStrLn ("FAILURE: " ++ show cmd ++ " " ++ show args)
        Bytecode -> dumpBC (simpleDecls ir) (outputFile ir)
@@ -178,9 +171,13 @@ getDeclarations used
 showCaseTrees :: [(Name, LDecl)] -> String
 showCaseTrees = showSep "\n\n" . map showCT . sortBy (comparing defnRank)
   where
-    showCT (n, LFun _ f args lexp)
-       = show n ++ " " ++ showSep " " (map show args) ++ " =\n\t"
+    showCT (n, LFun opts f args lexp)
+       = showOpts ++
+         show n ++ " " ++ showSep " " (map show args) ++ " =\n\t"
             ++ show lexp
+      where
+        showOpts | Inline `elem` opts = "%inline "
+                 | otherwise = ""
     showCT (n, LConstructor c t a) = "data " ++ show n ++ " " ++ show a
 
     defnRank :: (Name, LDecl) -> String
@@ -200,7 +197,6 @@ showCaseTrees = showSep "\n\n" . map showCT . sortBy (comparing defnRank)
     snRank (ParentN n s) = "3" ++ nameRank n ++ show s
     snRank (MethodN n) = "4" ++ nameRank n
     snRank (CaseN _ n) = "5" ++ nameRank n
-    snRank (ElimN n) = "6" ++ nameRank n
     snRank (ImplementationCtorN n) = "7" ++ nameRank n
     snRank (WithN i n) = "8" ++ nameRank n ++ show i
 
@@ -488,7 +484,7 @@ irTerm top vs env (Bind n (Lam _ _) sc) = LLam [n'] <$> irTerm top vs (n':env) s
   where
     n' = uniqueName n env
 
-irTerm top vs env (Bind n (Let _ v) sc)
+irTerm top vs env (Bind n (Let _ _ v) sc)
     = LLet n <$> irTerm top vs env v <*> irTerm top vs (n : env) sc
 
 irTerm top vs env (Bind _ _ _) = return $ LNothing
@@ -516,7 +512,9 @@ doForeign vs env (ret : fname : world : args)
         = do let l' = toFDesc l
              r' <- irTerm (sMN 0 "__foreignCall") vs env r
              return (l', r')
-    splitArg _ = ifail "Badly formed foreign function call"
+    splitArg _ = ifail $ "Badly formed foreign function call: " ++
+                         show (ret : fname : world : args)
+
 
     toFDesc (Constant (Str str)) = FStr str
     toFDesc tm
@@ -535,7 +533,7 @@ irTree top args tree = do
 
 irSC :: Name -> Vars -> SC -> Idris LExp
 irSC top vs (STerm t) = irTerm top vs [] t
-irSC top vs (UnmatchedCase str) = return $ LError str
+irSC top vs (UnmatchedCase str) = return $ LLazyExp $ LError str
 
 irSC top vs (ProjCase tm alts) = do
     tm'   <- irTerm top vs [] tm

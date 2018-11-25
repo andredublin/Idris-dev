@@ -1,7 +1,7 @@
 {-|
 Module      : Idris.IdrisDoc
 Description : Generation of HTML documentation for Idris code
-Copyright   :
+
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
@@ -10,33 +10,28 @@ Maintainer  : The Idris Community.
 module Idris.IdrisDoc (generateDocs) where
 
 import Idris.AbsSyntax
-import Idris.Core.Evaluate (Accessibility(..), Def(..), ctxtAlist, isDConName,
-                            isFnName, isTConName, lookupDefAcc)
-import Idris.Core.TT (Name(..), OutputAnnotation(..), SpecialName(..),
-                      TextFormatting(..), constIsType, nsroot, sUN, str,
-                      toAlist, txt)
+import Idris.Core.Evaluate (Accessibility(..), ctxtAlist, isDConName, isFnName,
+                            isTConName, lookupDefAcc)
+import Idris.Core.TT (Name(..), OutputAnnotation(..), TextFormatting(..),
+                      constIsType, nsroot, sUN, str, toAlist, txt)
 import Idris.Docs
 import Idris.Docstrings (nullDocstring)
 import qualified Idris.Docstrings as Docstrings
 import Idris.Options
-import Idris.Parser.Helpers (opChars)
+import Idris.Parser.Ops (opChars)
 import IRTS.System (getIdrisDataFileByName)
 
 import Control.Applicative ((<|>))
 import Control.Monad (forM_)
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State.Strict
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BS2
 import qualified Data.List as L
-import qualified Data.List.Split as LS
 import qualified Data.Map as M hiding ((!))
 import Data.Maybe
 import Data.Monoid (mempty)
-import qualified Data.Ord (compare)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as E
 import System.Directory
 import System.FilePath
 import System.IO
@@ -253,13 +248,6 @@ getAccess ist n =
      [(_, acc)] -> acc
      _          -> Private
 
--- | Simple predicate for whether an NsItem has Docs
-hasDoc :: NsItem -- ^ The NsItem to test
-       -> Bool   -- ^ The result
-hasDoc (_, Just _, _) = True
-hasDoc _              = False
-
-
 -- | Predicate saying whether a Name possibly may have docs defined
 --   Without this, getDocs from Idris.Docs may fail a pattern match.
 mayHaveDocs :: Name -- ^ The Name to test
@@ -291,7 +279,7 @@ extractPTermNames (PInferRef _ _ n)  = [n]
 extractPTermNames (PPatvar _ n)      = [n]
 extractPTermNames (PLam _ n _ p1 p2) = n : concatMap extract [p1, p2]
 extractPTermNames (PPi _ n _ p1 p2)  = n : concatMap extract [p1, p2]
-extractPTermNames (PLet _ n _ p1 p2 p3) = n : concatMap extract [p1, p2, p3]
+extractPTermNames (PLet _ _ n _ p1 p2 p3) = n : concatMap extract [p1, p2, p3]
 extractPTermNames (PTyped p1 p2)     = concatMap extract [p1, p2]
 extractPTermNames (PApp _ p pas)     = let names = concatMap extractPArg pas
                                        in  (extract p) ++ names
@@ -342,8 +330,10 @@ extractPDo (DoBind  _ n _ p)     = n : extract p
 extractPDo (DoBindP _ p1 p2 ps)  = let (ps1, ps2) = unzip ps
                                        ps'        = ps1 ++ ps2
                                    in  concatMap extract (p1 : p2 : ps')
-extractPDo (DoLet   _ n _ p1 p2) = n : concatMap extract [p1, p2]
-extractPDo (DoLetP  _ p1 p2)     = concatMap extract [p1, p2]
+extractPDo (DoLet _ _ n _ p1 p2) = n : concatMap extract [p1, p2]
+extractPDo (DoLetP  _ p1 p2 ps)  = let (ps1, ps2) = unzip ps
+                                       ps'        = ps1 ++ ps2
+                                   in  concatMap extract (p1 : p2 : ps')
 extractPDo (DoRewrite  _ p)      = extract p
 
 -- | Helper function for extractPTermNames
@@ -352,8 +342,6 @@ extractPTactic (Intro ns)         = ns
 extractPTactic (Focus n)          = [n]
 extractPTactic (Refine n _)       = [n]
 extractPTactic (Rewrite p)        = extract p
-extractPTactic (Induction p)      = extract p
-extractPTactic (CaseTac p)        = extract p
 extractPTactic (Equiv p)          = extract p
 extractPTactic (MatchRefine n)    = [n]
 extractPTactic (LetTac n p)       = n : extract p
@@ -415,7 +403,7 @@ createIndex :: S.Set NsName -- ^ Set of namespace names to
                             --   documentation will be written.
             -> IO ()
 createIndex nss out =
-  do (path, h) <- openTempFile out "index.html"
+  do (path, h) <- openTempFileWithDefaultPermissions out "index.html"
      BS2.hPut h $ renderHtml $ wrapper Nothing $ do
        H.h1 "Namespaces"
        H.ul ! class_ "names" $ do
@@ -439,15 +427,14 @@ createNsDoc :: IState   -- ^ Needed to determine the types of names
                         --   documentation will be written.
             -> IO ()
 createNsDoc ist ns content out =
-  do let tpath                   = out </> "docs" </> (genRelNsPath ns "html")
-         dir                     = takeDirectory tpath
-         file                    = takeFileName tpath
-         haveDocs (_, Just d, _) = [d]
-         haveDocs _              = []
+  do let tpath               = out </> "docs" </> (genRelNsPath ns "html")
+         dir                 = takeDirectory tpath
+         file                = takeFileName tpath
+         haveDocs (_, md, _) = md
                                  -- We cannot do anything without a Doc
-         content'                = concatMap haveDocs (nsContents content)
+         content'            = reverse $ mapMaybe haveDocs $ nsContents content
      createDirectoryIfMissing True dir
-     (path, h) <- openTempFile dir file
+     (path, h) <- openTempFileWithDefaultPermissions dir file
      BS2.hPut h $ renderHtml $ wrapper (Just ns) $ do
        H.h1 $ toHtml (nsName2Str ns)
        case nsDocstring content of
@@ -653,6 +640,8 @@ wrapper ns inner =
       indexPage  = base ++ "index.html" :: String
   in  H.docTypeHtml $ do
     H.head $ do
+      H.meta ! charset "utf-8"
+      H.meta ! name "viewport" ! content "width=device-width, initial-scale=1, shrink-to-fit=no"
       H.title $ do
         "IdrisDoc"
         if index then " Index" else do
